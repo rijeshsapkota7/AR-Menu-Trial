@@ -393,15 +393,16 @@
     src="Cheeseburger.glb"
     alt="Chef's Special Cheeseburger in 3D"
     ar
-    ar-modes="webxr scene-viewer quick-look"
+    ar-modes="scene-viewer webxr quick-look"
     ar-placement="floor"
-    ar-scale="auto"
+    ar-scale="fixed"
     camera-controls
     touch-action="none"
-    shadow-intensity="2"
-    shadow-softness="0.5"
-    exposure="1.1"
-    environment-image="legacy"
+    shadow-intensity="2.5"
+    shadow-softness="0.3"
+    exposure="1.2"
+    environment-image="neutral"
+    xr-environment
     style="position:absolute; width:1px; height:1px; opacity:0; pointer-events:none; top:0; left:0;"
   ></model-viewer>
 
@@ -437,13 +438,47 @@
     text-align:center; max-width:290px; line-height:1.6; box-shadow: 0 4px 24px rgba(0,0,0,0.5);
   "></div>
 
-  <!-- AR hint overlay shown while in AR session -->
+  <!-- Scanning hint: shown before surface found -->
+  <div id="ar-scanning" style="
+    display:none; position:fixed; top:50%; left:50%; transform:translate(-50%,-50%);
+    z-index:999; text-align:center; pointer-events:none;
+  ">
+    <div style="
+      width:180px; height:180px; border-radius:50%;
+      border: 2px dashed rgba(201,168,76,0.6);
+      display:flex; flex-direction:column; align-items:center; justify-content:center;
+      animation: spin 4s linear infinite;
+      backdrop-filter:blur(2px);
+    ">
+      <div style="font-size:2rem;">🍔</div>
+      <div style="font-size:0.7rem; color:rgba(201,168,76,0.9); margin-top:6px; letter-spacing:0.1em;">SCANNING…</div>
+    </div>
+  </div>
+
+  <!-- Place hint: shown when surface found but not yet placed -->
+  <div id="ar-place" style="
+    display:none; position:fixed; bottom:100px; left:50%; transform:translateX(-50%);
+    background:rgba(201,168,76,0.15); border:1px solid rgba(201,168,76,0.5); color:#f5eed8;
+    padding:10px 22px; border-radius:30px; font-size:0.78rem; z-index:999;
+    text-align:center; backdrop-filter:blur(8px); white-space:nowrap;
+    animation: pulse-border 1.5s ease-in-out infinite;
+  ">👇 Point at a flat table &amp; tap to place</div>
+
+  <!-- Gesture hint: shown after placed -->
   <div id="ar-hint" style="
     display:none; position:fixed; bottom:40px; left:50%; transform:translateX(-50%);
     background:rgba(14,12,10,0.85); border:1px solid rgba(201,168,76,0.4); color:#f5eed8;
     padding:10px 18px; border-radius:30px; font-size:0.75rem; z-index:999;
     text-align:center; white-space:nowrap; backdrop-filter:blur(8px);
-  ">👆 Tap to place &nbsp;·&nbsp; Pinch to resize &nbsp;·&nbsp; Drag to rotate</div>
+  ">🔄 Drag to rotate &nbsp;·&nbsp; Pinch to resize</div>
+
+  <style>
+    @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+    @keyframes pulse-border {
+      0%, 100% { box-shadow: 0 0 0 0 rgba(201,168,76,0.4); }
+      50%       { box-shadow: 0 0 0 8px rgba(201,168,76,0); }
+    }
+  </style>
 
   <script>
     window.addEventListener('load', () => {
@@ -495,15 +530,22 @@
       if (Math.abs(diff) > 40) { diff > 0 ? next() : prev(); }
     });
 
-    const viewer  = document.getElementById('viewer');
-    const arBtn   = document.getElementById('arTrigger');
-    const toast   = document.getElementById('toast');
-    const arHint  = document.getElementById('ar-hint');
+    const viewer    = document.getElementById('viewer');
+    const arBtn     = document.getElementById('arTrigger');
+    const toast     = document.getElementById('toast');
+    const arHint    = document.getElementById('ar-hint');
+    const arPlace   = document.getElementById('ar-place');
+    const arScanning = document.getElementById('ar-scanning');
 
     function showToast(msg, ms = 5000) {
       toast.innerHTML = msg;
       toast.style.display = 'block';
       setTimeout(() => toast.style.display = 'none', ms);
+    }
+    function hideAllARUI() {
+      arHint.style.display    = 'none';
+      arPlace.style.display   = 'none';
+      arScanning.style.display = 'none';
     }
 
     const ua        = navigator.userAgent;
@@ -515,40 +557,50 @@
       if (viewer.canActivateAR) {
         viewer.activateAR();
       } else if (isIOS) {
-        showToast('📱 Open this page in <strong>Safari</strong> on iPhone/iPad for AR.');
+        showToast('📱 Open in <strong>Safari</strong> on iPhone/iPad for AR.');
       } else if (isAndroid) {
-        showToast('📱 Open this page in <strong>Chrome</strong> on Android for AR.');
+        showToast('📱 Open in <strong>Chrome</strong> on Android for AR.');
       } else {
         showToast('📱 AR works on mobile only — scan the QR with your phone!');
       }
     });
 
-    // Show hint when AR session starts
     viewer.addEventListener('ar-status', (e) => {
-      if (e.detail.status === 'session-started') {
+      const status = e.detail.status;
+
+      if (status === 'session-started') {
+        // Phase 1: scanning — show spinning ring
+        hideAllARUI();
+        arScanning.style.display = 'block';
+
+        // Phase 2: after ~2s scanning assume surface found, prompt tap to place
+        setTimeout(() => {
+          arScanning.style.display = 'none';
+          arPlace.style.display    = 'block';
+        }, 2200);
+      }
+
+      if (status === 'object-placed') {
+        // Phase 3: placed — show gesture hints
+        hideAllARUI();
         arHint.style.display = 'block';
-        // Hide hint after 6 seconds
-        setTimeout(() => arHint.style.display = 'none', 6000);
+        setTimeout(() => arHint.style.display = 'none', 7000);
       }
 
-      if (e.detail.status === 'not-presenting') {
-        arHint.style.display = 'none';
+      if (status === 'not-presenting') {
+        hideAllARUI();
       }
 
-      if (e.detail.status === 'failed') {
+      if (status === 'failed') {
+        hideAllARUI();
         if (isIOS) {
           showToast('AR failed. Use <strong>Safari</strong> and allow camera access.');
         } else if (isAndroid) {
           showToast('AR failed. Install <strong>Google Play Services for AR</strong> and use Chrome.');
         } else {
-          showToast('AR not supported — you can still spin & zoom the 3D model above!');
+          showToast('AR not supported on this device.');
         }
       }
-    });
-
-    // Enable rotate & scale gestures inside AR via Scene Viewer intent params
-    viewer.addEventListener('quick-look-button-tapped', () => {
-      // iOS Quick Look handles gestures natively — no extra config needed
     });
   </script>
 </body>
