@@ -387,7 +387,7 @@
     <button class="arrow right" onclick="next()">&#8250;</button>
   </div>
 
-  <!-- keep model-viewer hidden — still needed for AR -->
+  <!-- model-viewer: visually hidden but active so AR can initialize -->
   <model-viewer
     id="viewer"
     src="Cheeseburger.glb"
@@ -402,7 +402,7 @@
     shadow-softness="0.5"
     exposure="1.1"
     environment-image="legacy"
-    style="display:none;"
+    style="position:absolute; width:1px; height:1px; opacity:0; pointer-events:none; top:0; left:0;"
   ></model-viewer>
 
   <!-- Bottom info card -->
@@ -448,6 +448,20 @@
   <script>
     window.addEventListener('load', () => {
       setTimeout(() => document.getElementById('loading').classList.add('hidden'), 1800);
+
+      // Auto fullscreen on open
+      const requestFS = () => {
+        const el = document.documentElement;
+        if (el.requestFullscreen)            el.requestFullscreen();
+        else if (el.webkitRequestFullscreen) el.webkitRequestFullscreen(); // iOS Safari
+        else if (el.mozRequestFullScreen)    el.mozRequestFullScreen();
+        else if (el.msRequestFullscreen)     el.msRequestFullscreen();
+      };
+      // Fullscreen needs a user gesture on most browsers —
+      // trigger on first touch/click so it fires reliably on mobile
+      const triggerFS = () => { requestFS(); document.removeEventListener('touchstart', triggerFS); document.removeEventListener('click', triggerFS); };
+      document.addEventListener('touchstart', triggerFS, { once: true });
+      document.addEventListener('click',      triggerFS, { once: true });
     });
 
     // ── Slider logic ──
